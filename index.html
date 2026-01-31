@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="csrf-token" content="{{ csrf_token() }}"> <!-- Required for Laravel API -->
+    <title>Chatify Pro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Dependencies for Realtime (Reverb/Pusher) -->
+    <script src="https://js.pusher.com/8.2.0/pusher.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/laravel-echo/1.15.3/echo.iife.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/1.6.2/axios.min.js"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        .animate-slide-up { animation: slideUp 0.3s ease-out; }
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+        .hidden { display: none !important; }
+    </style>
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@^19.2.3",
+    "react/": "https://esm.sh/react@^19.2.3/"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body class="bg-gray-50 h-screen w-screen overflow-hidden flex">
+
+    <!-- App Container -->
+    <div id="app" class="w-full h-full flex bg-white">
+        <!-- Sidebar -->
+        <aside class="w-80 border-r border-gray-100 flex flex-col bg-white z-10 flex-shrink-0">
+            <!-- Header -->
+            <div class="p-4 border-b border-gray-100 flex items-center justify-between bg-white">
+                <div class="flex items-center gap-3">
+                    <div class="relative">
+                        <img id="user-avatar" src="" alt="Me" class="w-12 h-12 rounded-full object-cover border-2 border-white shadow-sm">
+                        <span class="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></span>
+                    </div>
+                    <span class="font-bold text-gray-800 text-lg">Chatify Pro</span>
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="app.toggleSettings()" class="p-2 rounded-full hover:bg-gray-100 text-gray-500 transition-colors" id="settings-btn">
+                    </button>
+                </div>
+            </div>
+
+            <!-- Search -->
+            <div class="p-4">
+                <div class="relative">
+                    <input type="text" placeholder="Search" class="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                    <div class="absolute left-3 top-2.5 w-4 h-4 text-gray-400" id="icon-search"></div>
+                </div>
+            </div>
+
+            <!-- Conversation List -->
+            <div id="conversation-list" class="flex-1 overflow-y-auto">
+                <!-- Items injected by JS -->
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="flex-1 flex flex-col bg-[#eef2f6] relative">
+            
+            <!-- Chat View -->
+            <div id="view-chat" class="flex flex-col h-full w-full">
+                <!-- Empty State -->
+                <div id="empty-state" class="flex-1 flex flex-col items-center justify-center text-gray-400 p-8 hidden">
+                    <div class="w-48 h-48 bg-indigo-50 rounded-full flex items-center justify-center mb-6">
+                        <svg class="w-24 h-24 text-indigo-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                    </div>
+                    <h2 class="text-2xl font-bold text-gray-700 mb-2">Welcome to Chatify Pro</h2>
+                    <p class="text-center max-w-md">Select a conversation to start chatting.</p>
+                </div>
+
+                <!-- Active Chat Container -->
+                <div id="active-chat-container" class="flex flex-col h-full hidden">
+                    <!-- Chat Header -->
+                    <header class="h-16 bg-white border-b border-gray-100 flex items-center px-6 justify-between shadow-sm z-10">
+                        <div class="flex items-center gap-4">
+                            <img id="chat-header-avatar" src="" class="w-8 h-8 rounded-full object-cover">
+                            <div>
+                                <h2 id="chat-header-name" class="font-bold text-gray-800"></h2>
+                                <p id="chat-header-status" class="text-xs text-green-500 font-medium">Online</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-4 text-indigo-600">
+                             <div class="cursor-pointer hover:text-indigo-800" id="icon-search-header"></div>
+                             <div class="cursor-pointer hover:text-indigo-800" id="icon-settings-header"></div>
+                        </div>
+                    </header>
+
+                    <!-- Messages Area -->
+                    <div id="messages-area" class="flex-1 overflow-y-auto p-6 space-y-6" style="background-image: radial-gradient(#cbd5e1 1px, transparent 1px); background-size: 20px 20px;">
+                        <!-- Messages injected by JS -->
+                    </div>
+
+                    <!-- Attachment Preview -->
+                    <div id="attachment-preview" class="absolute inset-0 bg-black/50 backdrop-blur-sm z-50 flex flex-col justify-end hidden">
+                        <div class="bg-white rounded-t-2xl p-4 shadow-2xl animate-slide-up">
+                            <div class="flex justify-between items-center mb-4">
+                                <h3 class="font-bold text-gray-800">Preview Attachment</h3>
+                                <button onclick="app.clearAttachment()" class="p-1 hover:bg-gray-100 rounded-full" id="icon-close-preview"></button>
+                            </div>
+                            <div class="flex flex-col items-center gap-4">
+                                <div id="preview-content" class="w-full flex justify-center"></div>
+                                <div class="w-full relative">
+                                    <input id="caption-input" type="text" placeholder="Add a caption..." class="w-full bg-gray-50 border border-gray-200 rounded-full px-4 py-3 focus:ring-2 focus:ring-indigo-500 outline-none">
+                                    <button onclick="app.sendMessage()" class="absolute right-2 top-2 p-2 bg-indigo-600 text-white rounded-full hover:bg-indigo-700 transition-colors" id="icon-send-preview"></button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Input Area -->
+                    <div id="input-area" class="bg-white p-4 border-t border-gray-100 flex items-center gap-3">
+                         <div class="flex gap-2 text-gray-400">
+                            <button class="p-2 hover:bg-gray-100 rounded-full transition-colors relative overflow-hidden" id="btn-attach">
+                                <input type="file" id="file-input" class="absolute inset-0 opacity-0 cursor-pointer" onchange="app.handleFileUpload(this)">
+                            </button>
+                            <button class="p-2 hover:bg-gray-100 rounded-full transition-colors hidden md:block" id="btn-emoji"></button>
+                        </div>
+
+                        <!-- Text Input or Recording UI -->
+                        <div id="input-container" class="flex-1 flex">
+                            <input id="message-input" type="text" placeholder="Type a message..." class="flex-1 bg-gray-50 text-gray-800 rounded-full px-5 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all border border-transparent focus:border-indigo-100" onkeydown="if(event.key === 'Enter') app.sendMessage()">
+                        </div>
+
+                        <div id="recording-ui" class="flex-1 flex items-center gap-3 bg-red-50 px-4 py-2 rounded-full border border-red-100 animate-pulse hidden">
+                             <div class="w-3 h-3 bg-red-500 rounded-full animate-bounce"></div>
+                             <span id="recording-timer" class="text-red-500 font-mono font-medium">0:00</span>
+                             <span class="flex-1 text-red-400 text-sm">Recording...</span>
+                             <button onclick="app.stopRecording(false)" class="text-gray-500 hover:text-red-600 font-medium text-sm">Cancel</button>
+                        </div>
+                        
+                        <button id="action-btn" onclick="app.handleActionBtn()" class="p-3 bg-gray-100 text-gray-600 rounded-full hover:bg-gray-200 transition-colors shadow-sm transform hover:scale-105 active:scale-95"></button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Settings Dashboard -->
+            <div id="view-settings" class="flex-1 bg-gray-50 p-8 overflow-y-auto hidden">
+                <!-- Content identical to previous, just hidden by default -->
+                <div class="max-w-4xl mx-auto">
+                    <h1 class="text-3xl font-bold mb-4">Settings</h1>
+                    <div class="bg-white p-6 rounded shadow"><p>Settings panel here...</p></div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Application Logic -->
+    <script>
+        // Set Axios defaults
+        axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
+        // Note: In a blade template, you would use: axios.defaults.headers.common['X-CSRF-TOKEN'] = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+
+        // --- Config ---
+        const API_BASE = '/api/chatify';
+        
+        // --- Icons (SVG Strings) ---
+        const Icons = {
+            check: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>',
+            checkDouble: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L7 17l-5-5" /><path d="m22 10-7.5 7.5L13 16" /></svg>',
+            plus: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>',
+            mic: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>',
+            send: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>',
+            smile: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line></svg>',
+            search: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>',
+            settings: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>',
+            file: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>',
+            play: '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>',
+            dashboard: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>',
+            close: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>'
+        };
+
+        // --- State ---
+        const state = {
+            user: null,
+            conversations: [],
+            activeConversationId: null,
+            messages: {}, 
+            input: '',
+            attachment: null,
+            isRecording: false
+        };
+
+        const app = {
+            async init() {
+                this.renderIcons();
+                
+                // Initialize Echo
+                window.Echo = new Echo({
+                    broadcaster: 'reverb', // or pusher
+                    key: 'app-key',
+                    wsHost: window.location.hostname,
+                    wsPort: 8080,
+                    forceTLS: false,
+                    enabledTransports: ['ws', 'wss'],
+                });
+
+                try {
+                    // Fetch Conversations
+                    const res = await axios.get(`${API_BASE}/conversations`);
+                    state.conversations = res.data;
+                    this.renderSidebar();
+                } catch (e) {
+                    console.error("Backend not connected. Ensure Laravel is running.", e);
+                    // Add mock data if backend fails for demo purposes
+                    this.useMockFallback();
+                }
+
+                document.getElementById('message-input').addEventListener('input', (e) => {
+                    state.input = e.target.value;
+                    this.updateActionBtn();
+                });
+            },
+
+            async selectChat(id) {
+                state.activeConversationId = id;
+                document.getElementById('view-chat').classList.remove('hidden');
+                document.getElementById('empty-state').classList.add('hidden');
+                document.getElementById('active-chat-container').classList.remove('hidden');
+
+                // Render Header
+                const conv = state.conversations.find(c => c.id === id);
+                document.getElementById('chat-header-name').innerText = conv.name;
+                document.getElementById('chat-header-avatar').src = conv.avatar;
+
+                // Listen to Private Channel
+                window.Echo.private(`chat.conversation.${id}`)
+                    .listen('.message.sent', (e) => {
+                        console.log('New message:', e.message);
+                        this.appendMessage(e.message);
+                    });
+
+                try {
+                    const res = await axios.get(`${API_BASE}/conversations/${id}/messages`);
+                    state.messages[id] = res.data;
+                    this.renderChat();
+                } catch(e) {
+                    state.messages[id] = [];
+                    this.renderChat();
+                }
+            },
+
+            renderSidebar() {
+                const list = document.getElementById('conversation-list');
+                list.innerHTML = '';
+                state.conversations.forEach(conv => {
+                    const isActive = conv.id === state.activeConversationId;
+                    const el = document.createElement('div');
+                    el.className = `flex items-center gap-3 p-4 cursor-pointer transition-colors hover:bg-gray-50 ${isActive ? 'bg-indigo-50 border-r-4 border-indigo-600' : ''}`;
+                    el.onclick = () => this.selectChat(conv.id);
+                    el.innerHTML = `
+                        <img src="${conv.avatar}" class="w-12 h-12 rounded-full object-cover">
+                        <div class="flex-1 min-w-0">
+                            <h3 class="font-semibold text-gray-900 truncate">${conv.name}</h3>
+                            <p class="text-sm text-gray-500 truncate">${conv.lastMessage ? conv.lastMessage.content : 'No messages'}</p>
+                        </div>
+                        ${conv.unseenCount > 0 ? `<span class="bg-indigo-600 text-white text-xs px-2 py-0.5 rounded-full">${conv.unseenCount}</span>` : ''}
+                    `;
+                    list.appendChild(el);
+                });
+            },
+
+            renderChat() {
+                const msgs = state.messages[state.activeConversationId] || [];
+                const area = document.getElementById('messages-area');
+                area.innerHTML = '';
+                msgs.forEach(msg => this.appendMessage(msg, false));
+                area.scrollTop = area.scrollHeight;
+            },
+
+            appendMessage(msg, scroll = true) {
+                const area = document.getElementById('messages-area');
+                // Assume 'me' is checked by sender_id in a real app, simplified here
+                const isMe = msg.sender_id === state.user?.id; 
+                
+                const div = document.createElement('div');
+                div.className = `flex ${isMe ? 'justify-end' : 'justify-start'} group relative mb-2`;
+                div.innerHTML = `
+                    <div class="max-w-[70%] px-4 py-2 shadow-sm rounded-2xl text-sm ${isMe ? 'bg-indigo-600 text-white rounded-br-none' : 'bg-white text-gray-800 rounded-bl-none'}">
+                        ${msg.attachment ? this.renderAttachment(msg.attachment) : ''}
+                        <p>${msg.content || ''}</p>
+                    </div>
+                `;
+                area.appendChild(div);
+                if(scroll) area.scrollTop = area.scrollHeight;
+            },
+
+            renderAttachment(att) {
+                if(att.type === 'image') return `<img src="${att.url}" class="max-h-60 rounded-lg mb-2">`;
+                return `<div class="bg-black/10 p-2 rounded mb-2 flex items-center gap-2">${Icons.file} ${att.name}</div>`;
+            },
+
+            async sendMessage() {
+                let text = state.input;
+                const file = document.getElementById('file-input').files[0];
+                
+                // Form Data
+                const formData = new FormData();
+                formData.append('content', text);
+                
+                if (file) {
+                    formData.append('file', file);
+                    formData.append('type', file.type.includes('image') ? 'IMAGE' : 'FILE');
+                } else {
+                    formData.append('type', 'TEXT');
+                }
+
+                // Optimistic UI
+                const tempMsg = { 
+                    content: text, 
+                    sender_id: state.user?.id, 
+                    attachment: file ? { type: 'file', url: '#', name: file.name } : null 
+                };
+                this.appendMessage(tempMsg);
+                
+                // Reset Input
+                state.input = '';
+                document.getElementById('message-input').value = '';
+                this.updateActionBtn();
+
+                try {
+                    await axios.post(`${API_BASE}/conversations/${state.activeConversationId}/messages`, formData);
+                } catch(e) {
+                    console.error("Failed to send", e);
+                }
+            },
+
+            renderIcons() {
+                // ... same icon rendering as previous
+                document.getElementById('icon-search').innerHTML = Icons.search;
+                document.getElementById('icon-search-header').innerHTML = Icons.search;
+                document.getElementById('icon-settings-header').innerHTML = Icons.settings;
+                document.getElementById('settings-btn').innerHTML = Icons.settings;
+                document.getElementById('btn-attach').insertAdjacentHTML('afterbegin', Icons.plus);
+                document.getElementById('btn-emoji').innerHTML = Icons.smile;
+                document.getElementById('action-btn').innerHTML = Icons.mic;
+                document.getElementById('icon-close-preview').innerHTML = Icons.close;
+                document.getElementById('icon-send-preview').innerHTML = Icons.send;
+            },
+            
+            updateActionBtn() {
+                const btn = document.getElementById('action-btn');
+                const hasText = state.input.trim().length > 0;
+                if (hasText) {
+                    btn.innerHTML = Icons.send;
+                    btn.classList.add('bg-indigo-600', 'text-white');
+                } else {
+                    btn.innerHTML = Icons.mic;
+                    btn.classList.remove('bg-indigo-600', 'text-white');
+                }
+            },
+
+            handleFileUpload(input) {
+               // ... simplified upload preview logic
+               if(input.files[0]) {
+                   alert("File selected: " + input.files[0].name + ". Press Send.");
+               }
+            },
+            
+            handleActionBtn() {
+                if (state.input.trim().length > 0) this.sendMessage();
+                else alert("Voice recording not implemented in this demo.");
+            },
+
+            useMockFallback() {
+                // Just to prevent empty screen if backend is missing
+                state.conversations = [
+                    { id: '1', name: 'Demo Chat', avatar: 'https://ui-avatars.com/api/?name=Demo', lastMessage: { content: 'Backend unreachable' }, unseenCount: 0 }
+                ];
+                this.renderSidebar();
+            }
+        };
+
+        window.onload = () => app.init();
+        window.app = app;
+    </script>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>

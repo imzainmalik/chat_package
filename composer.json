@@ -1,0 +1,23 @@
+{
+    "name": "zainmalik/zain-chatify-pro-lara",
+    "description": "Realtime WhatsApp-like chat package for Laravel",
+    "type": "library",
+    "license": "MIT",
+    "autoload": {
+        "psr-4": {
+            "ChatifyPro\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "ChatifyPro\\ChatServiceProvider"
+            ]
+        }
+    },
+    "require": {
+        "php": "^8.1",
+        "illuminate/support": "^10.0|^11.0|^12.0",
+        "pusher/pusher-php-server": "^7.2"
+    }
+}

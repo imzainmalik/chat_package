@@ -1,0 +1,8 @@
+{
+  "name": "Chatify Pro Client 2.0",
+  "description": "A modern, real-time chat interface featuring groups, voice messages, reactions, and read receipts.",
+  "requestFramePermissions": [
+    "microphone",
+    "camera"
+  ]
+}
